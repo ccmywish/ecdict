@@ -17,7 +17,7 @@
 
 ## 演示
 
-![screencast](screencast.gif "ecdict && ecrepl")
+![screencast](https://gitee.com/ccmywish/ecdict/raw/master/screencast.gif)
 
 ## 安装
 
