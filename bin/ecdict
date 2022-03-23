@@ -3,7 +3,7 @@
 # File          : ecdict.rb
 # Authors       : ccmywish <ccmywish@qq.com>
 # Created on    : <2020-10-18>
-# Last modified : <2022-03-23>
+# Last modified : <2022-03-24>
 #
 # ecdict:
 #
@@ -30,8 +30,7 @@ ECDICT_GEM_VERSION  = "1.2.alpha2"
 # 这个文件的实际创建日期(上游作者创建)是2017/06/04
 # 至2022/03/22，未见更新，估计以后上游维护这个词典的也不会经常更新
 # 而340万的单词量已经足够，因此我们可以足够长的时间一直停留在此词典版本
-ECDICT_DICT_VERSION = "2020.10.19"
-ECDICT_DICT_DOWNLOAD_LINK = "https://gitee.com/ccmywish/ecdict/attach_files/1004013/download/ecdict-csv.7z"
+ECDICT_DICT_DOWNLOAD_LINK = "https://gitee.com/ccmywish/ecdict-data"
 ECDICT_DICT_SHA256 = "86782a0e5d05486b482be5a2e5fa99b1a9b2ae51240c853ecfe181886133818a"
 
 
@@ -88,13 +87,13 @@ def download_ecdict_data
     end
 
     begin
-      puts "=> 正在从#{ECDICT_DICT_DOWNLOAD_LINK}"
-      puts "=> 下载原始数据库文件(v#{ECDICT_DICT_VERSION})"
-      system("curl -L #{ECDICT_DICT_DOWNLOAD_LINK} -o #{ECDictRAWDATA}")
-      raise "=> 下载数据不完整!" if !check_download_integrity
+      puts "=> 使用Git从#{ECDICT_DICT_DOWNLOAD_LINK}获取原始数据库文件"
+      system("git -C #{ECDICT_STORAGE} clone #{ECDICT_DICT_DOWNLOAD_LINK} ")
+      FileUtils.cp(File.join(ECDICT_STORAGE, 'ecdict-data', 'ecdict-csv.7z'), ECDICT_STORAGE)
+      raise "Git拉取仓库数据不完整!" if !check_download_integrity
     rescue StandardError => e
       puts "=> #{e.message}"
-      puts "=> 下载失败，请检查网络连接(使用国内网络即可，不需要外网)"
+      puts "=> Git获取原始数据库文件失败"
       FileUtils.rm(ECDictRAWDATA)
     else
       puts "=> 下载完成!"
@@ -308,7 +307,6 @@ def download_and_install_ecdict_data
   puts "=> Hooray! 词典数据下载安装完成! 请尝试使用:"
   puts "=>   1. ecdict word  查询单词 "
   puts "=>   2. ecdict -r    进入交互式查询REPL"
-  puts
 end
 
 
@@ -328,7 +326,7 @@ end
 def reply_once(query)
 
   if !check_db_integrity
-    puts "=> 数据库不存在或数据库不完整，请使用ecdict -i来下载安装词典数据",""
+    puts "ecdict: 数据库不存在或数据库不完整，请使用ecdict -i来下载安装词典数据"
     exit -1
   end
 
@@ -394,11 +392,11 @@ end
 def chinese_search(cn_word, support_phrase: false)
 
   if cn_word.empty?
-    puts "ecdict: 请输入要查询的中文，或使用`ecdict -h`查看帮助", ""
+    puts "ecdict: 请输入要查询的中文，或使用`ecdict -h`查看帮助"
     exit 1
   end
   if !check_db_integrity
-    puts "=> 数据库不存在或数据库不完整，请使用`ecdict -i`来下载安装词典数据", ""
+    puts "=> 数据库不存在或数据库不完整，请使用`ecdict -i`来下载安装词典数据"
     exit -1
   end
 
@@ -419,7 +417,7 @@ def chinese_search(cn_word, support_phrase: false)
     end
   end
   if rows.empty?
-    puts "ecdict: 未找到相关英文,请不要输入中文短语或短句，仅支持词的搜索",""
+    puts "ecdict: 未找到相关英文,请不要输入中文短语或短句，仅支持词的搜索"
     exit 2
   else
     # 有的时候并不是没有结果，而是被我们过滤掉了，对此确认一下
@@ -542,7 +540,7 @@ end
 def start_ecrepl
 
   if !check_db_integrity
-    puts "=> 数据库不存在或数据库不完整，请使用`ecdict -i`来下载安装词典数据",""
+    puts "ecdict: 数据库不存在或数据库不完整，请使用`ecdict -i`来下载安装词典数据"
     exit -1
   end
 
@@ -679,10 +677,10 @@ end
 
 if ARGV.empty?
   if !check_db_integrity
-    puts "=> 数据库不存在或数据库不完整，请使用`ecdict -i`来下载安装词典数据",""
+    puts "ecdict: 数据库不存在或数据库不完整，请使用`ecdict -i`来下载安装词典数据"
     exit -1
   end
-  puts "ecdict: 请输入要查询的词/词组 或使用`ecdict -h`查看帮助",""
+  puts "ecdict: 请输入要查询的词/词组 或使用`ecdict -h`查看帮助"
   exit 1
 end
 

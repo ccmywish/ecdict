@@ -13,7 +13,7 @@
 
 ### Deprecations:
 
-- Not curl, use git to download data
+- Not curl, use `git` to download data
 
   1. Windows上有问题，用`curl`下载不下来
   2. 下载附件的速度过慢，远不如使用`git`快
