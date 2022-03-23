@@ -1,0 +1,12 @@
+# Keep it
+
+# 解压出来的csv文件
+ecdict.csv
+
+# 转换后的SQLite数据库文件
+ecdict.db
+
+# 不需要lock
+Gemfile.lock
+
+*.gem

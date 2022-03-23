@@ -1,0 +1,701 @@
+#!/usr/bin/env ruby
+# ------------------------------------------------------
+# File          : ecdict.rb
+# Authors       : ccmywish <ccmywish@qq.com>
+# Created on    : <2020-10-18>
+# Last modified : <2022-03-23>
+#
+# ecdict:
+#
+# The command line dict using ECDICT.
+#
+#       ECDICT: https://github.com/skywind3000/ECDICT
+#
+# This gem consists of:
+#   1. ecdict installer
+#   2. ecdict cmd
+#   3. ecdict repl
+# ------------------------------------------------------
+
+require 'sqlite3'
+
+ECDICT_STORAGE = File.expand_path("~/.local/share/ecdict")
+ECDictRAWDATA  = File.join(ECDICT_STORAGE, 'ecdict-csv.7z')
+ECDictDB  = File.join(ECDICT_STORAGE, 'ecdict.db')
+ECDictCSV = File.join(ECDICT_STORAGE, 'ecdict.csv')
+
+ECDICT_GEM_VERSION  = "1.2.alpha2"
+
+# 这个版本是我从上游下载的CSV后自己压缩的
+# 这个文件的实际创建日期(上游作者创建)是2017/06/04
+# 至2022/03/22，未见更新，估计以后上游维护这个词典的也不会经常更新
+# 而340万的单词量已经足够，因此我们可以足够长的时间一直停留在此词典版本
+ECDICT_DICT_VERSION = "2020.10.19"
+ECDICT_DICT_DOWNLOAD_LINK = "https://gitee.com/ccmywish/ecdict/attach_files/1004013/download/ecdict-csv.7z"
+ECDICT_DICT_SHA256 = "86782a0e5d05486b482be5a2e5fa99b1a9b2ae51240c853ecfe181886133818a"
+
+
+require 'fileutils'
+FileUtils.mkdir_p(ECDICT_STORAGE)
+$DB = SQLite3::Database.new ECDictDB
+
+
+####################
+# helper: for color
+####################
+
+def bold(str)       "\e[1m#{str}\e[0m" end
+def underline(str)  "\e[4m#{str}\e[0m" end
+def red(str)        "\e[31m#{str}\e[0m" end
+def green(str)      "\e[32m#{str}\e[0m" end
+def yellow(str)     "\e[33m#{str}\e[0m" end
+def blue(str)       "\e[34m#{str}\e[0m" end
+def purple(str)     "\e[35m#{str}\e[0m" end
+def cyan(str)       "\e[36m#{str}\e[0m" end
+
+
+
+##########################
+# db download and install
+##########################
+#
+# 1. Download .7z file from Gitee
+# 2. Decompress the .7z file to CSV file
+# 3. Transform CSV file into database
+#
+
+def check_download_integrity
+  require 'digest'
+  cont = File.read(ECDictRAWDATA)
+  sha256 = Digest::SHA256.hexdigest(cont)
+  if ECDICT_DICT_SHA256 == sha256
+    true
+  else
+    false
+  end
+end
+
+
+def download_ecdict_data
+
+  if File.exists?(ECDictRAWDATA) && check_download_integrity
+    puts "=> 已存在原始数据文件#{ECDictRAWDATA}, 无需再次下载"
+  else
+
+    if File.exists?(ECDictRAWDATA)
+      puts "=> 删除已存在但不完整的数据"
+      FileUtils.rm ECDictRAWDATA
+    end
+
+    begin
+      puts "=> 正在从#{ECDICT_DICT_DOWNLOAD_LINK}"
+      puts "=> 下载原始数据库文件(v#{ECDICT_DICT_VERSION})"
+      system("curl -L #{ECDICT_DICT_DOWNLOAD_LINK} -o #{ECDictRAWDATA}")
+      raise "=> 下载数据不完整!" if !check_download_integrity
+    rescue StandardError => e
+      puts "=> #{e.message}"
+      puts "=> 下载失败，请检查网络连接(使用国内网络即可，不需要外网)"
+      FileUtils.rm(ECDictRAWDATA)
+    else
+      puts "=> 下载完成!"
+    end
+  end
+
+  true
+end
+
+
+def decompress_7z_to_csv()
+  require 'seven_zip_ruby'
+
+  # 正常解压出来的CSV应当至少200MB以上
+  if File.exists?(ECDictCSV)
+    if File.size(ECDictCSV) <= 200*1024*1024
+      puts "=> 删除旧有的不完全词典数据"
+      FileUtils.rm(ECDictCSV)
+    else
+      puts "=> CSV数据已存在，无需再次解压，直接使用"
+      return true
+    end
+  end
+
+
+  File.open(ECDictRAWDATA, "rb") do |file|
+    puts "=> 正在解压ecdict-csv.7z(#{file.size/1024/1024}MB)"
+    SevenZipRuby::Reader.extract_all(file, ECDICT_STORAGE)
+  end
+
+  puts "=> 已成功解压出ecdict.csv(#{File.size(ECDictCSV)/1024/1024}MB)"
+  true
+end
+
+
+#
+# 检查生成出来的db的完整性
+# 不太方便检查，只能粗略的查看大小
+#
+def check_db_integrity
+  # 正常从CSV生成出来的数据库应当至少400MB以上
+  if File.size(ECDictDB) <= 400*1024*1024
+    false
+  else
+    true
+  end
+end
+
+
+#
+# This is the Ruby versioned [stardict.py] from
+#     https://github.com/skywind3000/ECDICT
+#
+# It generates [ecdict.db] in 3 steps:
+#
+#   1. create new and empty db file
+#   2. create table in the db
+#   3. insert data from CSV into the table
+#
+# exit 1 : create db failed
+# exit 2 : insert data failed
+#
+def generate_sqlite_db()
+
+  # SQLite3::Database.new已经生成了该文件,所以需要提前判断到底是否存在
+  if File.exist?(ECDictDB)
+
+    if !check_db_integrity
+      puts "=> 删除旧有的不完整数据库"
+      $DB.close
+      FileUtils.rm(ECDictDB)
+      $DB = SQLite3::Database.new ECDictDB
+    else
+      puts "=> 完整(可能的)数据库已存在，无需再次从CSV文件生成，直接使用"
+      return true
+    end
+  end
+
+  def db_close
+    $DB.close if $DB
+  end
+
+  # 共15个字段,存的时候只需要14个
+  # 1.id    	    主键，自增
+  # 2.sw          strip word(删除非alnum字符)
+  # 3.word 	      单词名称
+  # 4.phonetic 	  音标，以英语英标为主
+  # 5.definition 	单词释义（英文），每行一个释义
+  # 6.translation 单词释义（中文），每行一个释义
+  # 7.pos         词语位置，用 "/" 分割不同位置
+  # 8.collins 	  柯林斯星级
+  # 9.oxford   	  是否是牛津三千核心词汇
+  # 10.tag 	      字符串标签：zk/中考，gk/高考，cet4/四级 等等标签，空格分割
+  # 11.bnc        英国国家语料库词频顺序
+  # 12.frq        当代语料库词频顺序
+  # 13.exchange   时态复数等变换，使用 "/" 分割不同项目
+  # 14.detail     json 扩展信息，字典形式保存例句（待添加）
+  # 15.audio      读音音频 url （待添加）
+
+sql = <<-EOF
+  CREATE TABLE IF NOT EXISTS "ecdict" (
+    "id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL UNIQUE,
+    "word" VARCHAR(64) COLLATE NOCASE NOT NULL UNIQUE,
+    "sw" VARCHAR(64) COLLATE NOCASE NOT NULL,
+    "phonetic" VARCHAR(64),
+    "definition" TEXT,
+    "translation" TEXT,
+    "pos" VARCHAR(16),
+    "collins" INTEGER DEFAULT(0),
+    "oxford" INTEGER DEFAULT(0),
+    "tag" VARCHAR(64),
+    "bnc" INTEGER DEFAULT(NULL),
+    "frq" INTEGER DEFAULT(NULL),
+    "exchange" TEXT,
+    "detail" TEXT,
+    "audio" TEXT
+  );
+    CREATE UNIQUE INDEX IF NOT EXISTS "ecdict_1" ON ecdict (id);
+    CREATE UNIQUE INDEX IF NOT EXISTS "ecdict_2" ON ecdict (word);
+    CREATE INDEX IF NOT EXISTS "ecdict_3" ON ecdict (sw, word collate nocase);
+    CREATE INDEX IF NOT EXISTS "ecd_1" ON ecdict (word collate nocase);
+EOF
+
+
+  begin
+    $DB.execute sql
+    puts "=> 创建数据库文件#{ECDictDB}，并生成表`ecdict`"
+  rescue Exception => e
+    puts "=> #{e.message}"
+    puts "=> 创建数据库文件#{ECDictDB}失败，或表`ecdict`生成失败"
+    db_close
+    File.delete(ECDictDB)
+    exit 1
+  end
+
+
+  # 这是生成数据库中sw字段的函数，用于模糊匹配，csv中并不包含此字段
+  def strip_word(word)
+    word.gsub(/\W/,'').downcase
+  end
+
+  your_machine = case RUBY_PLATFORM
+  when /linux/i then "linux"
+  when /ucrt/i, /mingw/i then "windows"
+  when /mac/i   then "mac"
+  when /bsd/i then "bsd"
+  else "machine"
+  end
+
+  begin
+    puts <<~EOC
+
+    #{blue("gem_name  = 'ecdict'")}
+    #{blue("version   = '#{ECDICT_GEM_VERSION}'")}
+    #{blue("author    = 'ccmywish'")}
+    #{blue("bug_track = [ 'https://gitee.com/ccmywish/ecdict/issues'
+              'https://github.com/ccmywish/ecdict/issues ]")}
+
+    #{green("if")} #{purple("your_#{your_machine}_is_good")}
+      wait n =~ #{red('3min or less')}
+    #{green("end")}
+
+    #{blue(bold("the_\#{author}_is_busily_inserting_data_for_you(...)"))}
+
+    EOC
+
+    require 'progress_bar'
+    # progress_bar的bar在Windows上显示有问题
+    progress  = ProgressBar.new(3402560,:counter,:percentage,:elapsed)
+
+    columns = %w{word sw phonetic definition translation pos collins oxford
+                 tag bnc frq exchange detail audio}.join(',')
+
+    insert  = "INSERT INTO ecdict (#{columns}) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+
+    require 'csv'
+    num = 0
+    $DB.transaction
+    CSV.foreach(ECDictCSV) do |row|
+      num = num + 1
+      next if num == 1     # headers不加入
+      row.map! do |n|
+       r = n.nil?? '' : n
+       r.gsub('\n',"\n")   # 插入数据库时应直接转换为真的换行符
+      end
+      sw = strip_word(row[0])
+      row.insert(1,sw)
+      $DB.execute(insert,row)
+      progress.increment!
+    end
+    $DB.commit
+
+  rescue Exception => e
+    puts "=> #{e.message}"
+    puts "=> 数据库插入信息失败"
+    File.delete(ECDictDB)
+    db_close
+    exit 2
+  end
+  puts
+  puts "=> 数据库#{ECDictDB}已完整生成"
+  db_close
+end
+
+
+def download_and_install_ecdict_data
+  download_ecdict_data || ( puts("\e[31m=> 下载失败，安装取消！\e[0m") || exit(-1) )
+  decompress_7z_to_csv || ( puts("\e[31m=> 解压失败，安装取消！\e[0m") || exit(-2) )
+  generate_sqlite_db   || ( puts("\e[31m=> 生成数据库失败，安装取消!\e[0m") || exit(-3) )
+  puts
+  puts "=> Hooray! 词典数据下载安装完成! 请尝试使用:"
+  puts "=>   1. ecdict word  查询单词 "
+  puts "=>   2. ecdict -r    进入交互式查询REPL"
+  puts
+end
+
+
+
+####################
+#   ecdict  cmd
+####################
+#
+# Error code -1: No db or db not intact
+# Error code  1: No input
+# Error code  2: Don't find a result
+#
+
+#
+# Look up the dictionary db once a call
+#
+def reply_once(query)
+
+  if !check_db_integrity
+    puts "=> 数据库不存在或数据库不完整，请使用ecdict -i来下载安装词典数据",""
+    exit -1
+  end
+
+  tables = []
+  $DB.execute "SELECT name FROM sqlite_master WHERE TYPE = 'table' AND name != 'sqlite_sequence'; " do |tbl|
+    tables << tbl
+  end
+  # 每个表自己被数组包裹， [["gnuutils"], ["ruby"]]
+  tables.flatten!
+
+
+  rows = []
+  tables.each do |t|
+    $DB.execute "SELECT phonetic,translation,definition,exchange  FROM #{t} WHERE word = '#{query}'" do |row|
+      rows << row
+    end
+  end
+
+  if rows.empty?
+    puts "ecdict: 未找到结果,请检查单词拼写是否正确",""
+    exit 2
+  else
+    line = rows[0]
+    phonetic,trans,definition,exchange = line[0],line[1],line[2],line[3]
+    puts "#{query} [#{phonetic.strip.empty?? :nil : phonetic}]"
+    puts
+    puts "* 中文翻译"
+    trans.split("\n").each {|t| puts "- #{t}"}
+    puts
+    if !definition.nil? && definition.strip != ""
+      puts "* 英文释义"
+      definition.split("\n").each {|t| puts "- #{t}"}
+      puts
+    end
+    if !exchange.nil? && !exchange.strip.empty?
+      puts "* 变化形式"
+      exchange.split("/").each do |e|
+        print "- "
+        type,word = e.split(":")
+        case type
+          when ?p then print "过去式  : "
+          when ?d then print "过去分词: "
+          when ?i then print "现在分词: "
+          when ?3 then print "第三人称: "
+          when ?r then print "比较级 : "
+          when ?t then print "最高级 : "
+          when ?s then print "名词复数: "
+          when ?0 then print "词根来源: "
+          when ?1 then print "词根变化: "
+        end
+      puts word
+      end
+    end
+  end
+
+  $DB.close if $DB
+end
+
+
+#
+# Search Chinese word to find English words
+#
+def chinese_search(cn_word, support_phrase: false)
+
+  if cn_word.empty?
+    puts "ecdict: 请输入要查询的中文，或使用`ecdict -h`查看帮助", ""
+    exit 1
+  end
+  if !check_db_integrity
+    puts "=> 数据库不存在或数据库不完整，请使用`ecdict -i`来下载安装词典数据", ""
+    exit -1
+  end
+
+  if support_phrase
+    puts "ecdict: 搜索加强，支持短语"
+  end
+
+  tables = []
+  $DB.execute "SELECT name FROM sqlite_master WHERE TYPE = 'table' AND name != 'sqlite_sequence'; " do |tbl|
+    tables << tbl
+  end
+  tables.flatten!
+
+  rows = []
+  tables.each do |t|
+    $DB.execute "SELECT word, translation FROM #{t} WHERE translation LIKE '%#{cn_word}%' " do |row|
+      rows << row
+    end
+  end
+  if rows.empty?
+    puts "ecdict: 未找到相关英文,请不要输入中文短语或短句，仅支持词的搜索",""
+    exit 2
+  else
+    # 有的时候并不是没有结果，而是被我们过滤掉了，对此确认一下
+    found_a_word = false
+
+    rows.each do |line|
+      en_word,trans = line[0],line[1]
+
+      # 过长的直接跳过
+      next if trans.length > 35
+      # 有换行符的太长，直接跳过
+      next if trans.include?("\r\n")
+      next if trans.include?("\n")
+
+      # 不要搜索词组
+      if !support_phrase
+        next if en_word.include?(' ')
+      end
+      # 不要搜索连字词
+      next if en_word.include?('-')
+
+      # filter
+      # "[网络] 微软，认证专家；微软认证产品专家；微软专家认证"
+      trans_words1 = trans.split(',') # 英文逗号!!!
+
+      trans_words = []
+      trans_words1.each do |w|
+        trans_words << w.split('；') # 中文分号!!!
+      end
+      # [ [] [] [] ]
+      trans_words = trans_words.flatten
+
+      ret = nil
+      trans_words.each do |t|
+        ret = t.split.index do
+          # 必须以搜索的中文开头，最多容纳两个字符
+          # _1 =~ /^#{cn_word}.{0,2}$/
+
+          # 往往中文都是精确搜索
+          _1 == cn_word
+        end
+        break if ret
+      end
+
+      if !ret.nil?
+        found_a_word = true
+        puts "#{blue(en_word)}: #{trans}"
+      end
+    end
+
+    if found_a_word
+      puts
+    else
+      puts "ecdict: 抱歉，为了防止显示内容过多，已将可能的答案过滤了",""
+    end
+  # end of else
+  end
+
+end
+
+
+####################
+#   ecdict  REPL
+####################
+
+#
+# Look up the dictionary db all the time in a not ending way,
+# that is, interactively as a REPL does.
+#
+# Notice the similar function `reply_once` above,
+# which only answer once.
+#
+def replying(query)
+
+  answer = nil
+  $DB.execute "SELECT phonetic,translation,definition,exchange FROM ecdict WHERE word = '#{query}'" do |row|
+    answer = row
+  end
+  if answer.nil?
+    puts "未找到结果,请检查单词拼写是否正确"
+  else
+    line = answer
+    phonetic,trans,definition,exchange = line[0],line[1],line[2],line[3]
+    puts "#{query} [#{phonetic.strip.empty?? :nil : phonetic}]"
+    puts
+    puts "* 中文翻译"
+    trans.split("\n").each {|t| puts "- #{t}"}
+    puts
+    if !definition.nil? && definition.strip != ""
+      puts "* 英文释义"
+      definition.split("\n").each {|t| puts "- #{t}"}
+      puts
+    end
+    if !exchange.nil? && !exchange.strip.empty?
+      puts "* 变化形式"
+      exchange.split("/").each do |e|
+        print "- "
+        type,word = e.split(":")
+        case type
+        when ?p then print "过去式  : "
+        when ?d then print "过去分词: "
+        when ?i then print "现在分词: "
+        when ?3 then print "第三人称: "
+        when ?r then print "比较级 : "
+        when ?t then print "最高级 : "
+        when ?s then print "名词复数: "
+        when ?0 then print "词根来源: "
+        when ?1 then print "词根变化: "
+        end
+        puts word
+      end
+    end
+  end
+end
+
+
+#
+# Start ecrepl
+#
+def start_ecrepl
+
+  if !check_db_integrity
+    puts "=> 数据库不存在或数据库不完整，请使用`ecdict -i`来下载安装词典数据",""
+    exit -1
+  end
+
+  def db_close_and_exit
+    $DB.close if $DB
+    exit 0
+  end
+
+  begin
+    stty_save = `stty -g`.chomp
+  rescue
+  end
+
+  #
+  # completion
+  #
+  require 'ls_table'
+  require 'reline'
+  Reline.completion_proc = lambda do |word|
+    if word.strip.empty?
+      return %w{1.输入单词查询 2.输入exit或按Ctrl-C退出}
+    end
+
+    max_len = word.length + 4
+    puts
+
+    # $DB.execute "SELECT DISTINCT sw FROM ecdict WHERE sw LIKE '#{word}%' AND length(sw)<#{max_len} LIMIT 12" { |row| puts row }
+
+    # 以word开头的单词
+    ret = $DB.execute "SELECT DISTINCT sw FROM ecdict WHERE sw LIKE '#{word}%'
+    AND length(sw)<#{max_len} LIMIT 64"
+    # [["baba"], ["babe"], ["babn"], ["baby"]]
+    ret = ret.to_a.flatten
+
+    if word.length <= 7
+      LsTable.ls(ret) { puts blue(_1) }
+    else
+      LsTable.ls(ret, cell_len: 14, cell_num: 6) { puts blue(_1) }
+    end
+
+    puts
+
+    # 前面至少有一个字符
+    ret = $DB.execute "SELECT DISTINCT sw FROM ecdict WHERE sw LIKE '_%#{word}%'
+    AND length(sw)<#{max_len} LIMIT 64"
+    ret = ret.to_a.flatten
+    if word.length <= 7
+      LsTable.ls(ret) { puts blue(_1) }
+    else
+      LsTable.ls(ret, cell_len: 14, cell_num: 6) { puts blue(_1) }
+    end
+
+  end
+
+  #
+  # main query
+  #
+  begin
+    puts red("ECDict REPL (Ruby #{RUBY_VERSION} Powered)")
+
+    while line = Reline.readline("\e[32mecdict> \e[0m", true)
+      case word = line.chomp
+      when 'exit'
+        db_close_and_exit
+      when ''
+        # NOOP
+      else
+        replying(word)
+      end
+    end
+  rescue Interrupt
+    puts '^C'
+    `stty #{stty_save}` if stty_save
+    db_close_and_exit
+  end
+
+end
+
+
+#
+# remove everything in #{ECDICT_STORAGE}
+#
+def delete_cache
+
+  begin
+    FileUtils.rm_rf(ECDICT_STORAGE)
+  rescue => e
+    puts "=> #{e.message}"
+    puts "=> 清空词典数据失败"
+  else
+    puts "=> 清空词典数据完成"
+  end
+  puts
+end
+
+
+####################
+#     others
+####################
+
+def print_version
+  puts <<EOH
+ecdict (v#{ECDICT_GEM_VERSION}): A courteous cli translator.
+
+
+EOH
+
+end
+
+
+def help
+  puts <<EOH
+ecdict (v#{ECDICT_GEM_VERSION}): A courteous cli translator.
+
+usage:
+
+  ecdict word      => 查询单词 word
+  ecdict -r        => 启动ecdict repl交互式查询，输入exit或Ctrl-C退出
+  ecdict -c  中文  => 搜索中文对应的英文单词
+  ecdict -cp 中文  => 搜索中文对应的英文单词以及短语(结果可能很多)
+  ecdict -i        => 下载ecdict词典数据并安装
+  ecdict -v        => 打印此Gem与词典版本号
+  ecdict -h        => 打印此帮助
+  ecdict -d        => 清空词典数据
+
+EOH
+
+end
+
+
+####################
+#      main
+####################
+
+if ARGV.empty?
+  if !check_db_integrity
+    puts "=> 数据库不存在或数据库不完整，请使用`ecdict -i`来下载安装词典数据",""
+    exit -1
+  end
+  puts "ecdict: 请输入要查询的词/词组 或使用`ecdict -h`查看帮助",""
+  exit 1
+end
+
+query = ARGV.shift
+case query
+when "-v"  then print_version
+when "-h"  then help
+when "-i"  then download_and_install_ecdict_data
+when "-r"  then start_ecrepl
+when "-d"  then delete_cache
+when "-c"  then chinese_search(ARGV.join)
+when "-cp" then chinese_search(ARGV.join, support_phrase: true)
+else
+  reply_once(query)
+end
+
