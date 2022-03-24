@@ -19,7 +19,7 @@ gem install ecdict
 
 命令行端的离线词典`ecdict`，提供**中英文双模式查询，支持REPL交互式查询**，安装仅需要一个命令，其过程不需要外网。数据源包含340万单词，由项目[skywind3000/ECDICT](https://github.com/skywind3000/ECDICT)提供。支持 Linux，Windows，macOS.
 
-若您有新的想法，发现了存在的/潜在的问题、可改善的地方(比如对REPL的交互性优化)，又或者您想要参与开发以及日常维护，请您在[issues](https://gitee.com/RubyKids/rbenv-cn/issues) 处反馈，并请阅读[CONTRIBUTING.md](./CONTRIBUTING.md)
+若您有新的想法，发现了存在的/潜在的问题、可改善的地方(比如对REPL的交互性优化)，又或者您想要参与开发以及日常维护，请您在[issues](https://gitee.com/ccmywish/ecdict/issues) 处反馈，并请阅读[CONTRIBUTING.md](./CONTRIBUTING.md)
 
 <br>
 
