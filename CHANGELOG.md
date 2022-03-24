@@ -2,6 +2,10 @@
 
 ## [Unreleased](#) (2022-03-24)
 
+<br>
+
+## [v1.2](#) (2022-03-24)
+
 ### New features:
 
 - Support Chinese phrase search 
