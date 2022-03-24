@@ -9,6 +9,8 @@
 
 ### Enhancements:
 
+- Very robust download process
+- Refactor function name
 - Ensure close db
 - Fix exit status
 - Remove not used files

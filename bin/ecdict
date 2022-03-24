@@ -21,16 +21,19 @@
 # EXit -3: 从CSV生成数据库失败
 # Exit  1: 无词典
 # Exit  2: 缺少参数
+#
+# 未搜索到结果并不认为是错误
 # ------------------------------------------------------
 
 require 'sqlite3'
 
-ECDICT_STORAGE = File.expand_path("~/.local/share/ecdict")
-ECDictRAWDATA  = File.join(ECDICT_STORAGE, 'ecdict-csv.7z')
+ECDICT_STORAGE   = File.expand_path("~/.local/share/ecdict")
+ECDICT_RAW_DATA  = File.join(ECDICT_STORAGE, 'ecdict-csv.7z')
+
 ECDictDB  = File.join(ECDICT_STORAGE, 'ecdict.db')
 ECDictCSV = File.join(ECDICT_STORAGE, 'ecdict.csv')
 
-ECDICT_GEM_VERSION  = "1.2.alpha4"
+ECDICT_GEM_VERSION  = "1.2.alpha5"
 
 # 这个版本是我从上游下载的CSV后自己压缩的
 # 这个文件的实际创建日期(上游作者创建)是2017/06/04
@@ -44,12 +47,12 @@ require 'fileutils'
 FileUtils.mkdir_p(ECDICT_STORAGE)
 $DB = SQLite3::Database.new ECDictDB
 
-def db_close
+def close_db
   $DB.close if $DB
 end
 
-def db_close_and_exit(num = 0)
-  db_close
+def close_db_and_exit(num = 0)
+  close_db
   exit num
 end
 
@@ -81,7 +84,8 @@ def cyan(str)       "\e[36m#{str}\e[0m" end
 
 def check_download_integrity
   require 'digest'
-  sha256 = Digest::SHA256.file(ECDictRAWDATA).hexdigest
+  return false if !File.exists?(ECDICT_RAW_DATA)
+  sha256 = Digest::SHA256.file(ECDICT_RAW_DATA).hexdigest
   if ECDICT_DICT_SHA256 == sha256
     true
   else
@@ -90,31 +94,47 @@ def check_download_integrity
 end
 
 
-def download_ecdict_data
+def download_ecdict_raw_data
 
-  if File.exists?(ECDictRAWDATA) && check_download_integrity
-    puts "=> 已存在原始数据文件#{ECDictRAWDATA}, 无需再次下载"
+  if File.exists?(ECDICT_RAW_DATA) && check_download_integrity
+    puts "=> 已存在原始数据文件#{ECDICT_RAW_DATA}, 无需再次下载"
   else
 
-    if File.exists?(ECDictRAWDATA)
-      puts "=> 删除已存在但不完整的数据"
-      FileUtils.rm ECDictRAWDATA
+    if File.exists?(ECDICT_RAW_DATA)
+      puts "=> 删除已存在但不完整的原始数据文件"
+      FileUtils.rm ECDICT_RAW_DATA
+    end
+
+    # 若已经有拉取的仓库，先检查里面的数据是否可用
+    raw_data_git_dir = File.join(ECDICT_STORAGE, 'ecdict-data')
+    raw_data_git_dir_data = File.join(raw_data_git_dir, 'ecdict-csv.7z')
+
+    if Dir.exists?(raw_data_git_dir)
+      if File.exists?(raw_data_git_dir_data)
+        FileUtils.cp(raw_data_git_dir_data, ECDICT_STORAGE)
+        if check_download_integrity
+          puts "=> 从已经Git pull到的仓库中获取原始数据文件"
+          return true
+        else
+          FileUtils.rm ECDICT_RAW_DATA
+        end
+      end
+      FileUtils.rm_rf(raw_data_git_dir)
     end
 
     begin
       puts "=> 使用Git从#{ECDICT_DICT_DOWNLOAD_LINK}获取原始数据库文件"
-      system("git -C #{ECDICT_STORAGE} clone #{ECDICT_DICT_DOWNLOAD_LINK} ")
-      FileUtils.cp(File.join(ECDICT_STORAGE, 'ecdict-data', 'ecdict-csv.7z'), ECDICT_STORAGE)
-      raise "Git拉取仓库数据不完整!" if !check_download_integrity
+      ret = system("git -C #{ECDICT_STORAGE} clone #{ECDICT_DICT_DOWNLOAD_LINK} ")
+      FileUtils.cp(File.join(ECDICT_STORAGE, 'ecdict-data', 'ecdict-csv.7z'), ECDICT_STORAGE) rescue nil
+      raise "Git拉取仓库过程失败，原始数据文件不完整!" if (ret != true  || !check_download_integrity)
     rescue StandardError => e
       puts "=> #{e.message}"
-      puts "=> Git获取原始数据库文件失败"
-      FileUtils.rm(ECDictRAWDATA)
+      FileUtils.rm(ECDICT_RAW_DATA) rescue nil
+      return false
     else
       puts "=> 下载完成!"
     end
   end
-
   true
 end
 
@@ -134,12 +154,12 @@ def decompress_7z_to_csv()
   end
 
 
-  File.open(ECDictRAWDATA, "rb") do |file|
-    puts "=> 正在解压ecdict-csv.7z(#{file.size/1024/1024}MB)"
+  File.open(ECDICT_RAW_DATA, "rb") do |file|
+    puts "=> 正在解压ecdict-csv.7z(#{ '%.2f' % (file.size/1024.0/1024) }MB)"
     SevenZipRuby::Reader.extract_all(file, ECDICT_STORAGE)
   end
 
-  puts "=> 已成功解压出ecdict.csv(#{File.size(ECDictCSV)/1024/1024}MB)"
+  puts "=> 已成功解压出ecdict.csv(#{ '%.2f' % (File.size(ECDictCSV)/1024.0/1024) }MB)"
   true
 end
 
@@ -233,7 +253,7 @@ EOF
   rescue Exception => e
     puts "=> #{e.message}"
     puts "=> 创建数据库文件#{ECDictDB}失败，或表`ecdict`生成失败"
-    db_close
+    close_db
     File.delete(ECDictDB)
     return false
   end
@@ -298,19 +318,19 @@ EOF
   rescue Exception => e
     puts "=> #{e.message}"
     puts "=> 数据库插入信息失败"
-    db_close
+    close_db
     File.delete(ECDictDB)
     return false
   end
   puts
   puts "=> 数据库#{ECDictDB}已完整生成"
-  db_close
+  close_db
   return true
 end
 
 
 def download_and_install_ecdict_data
-  download_ecdict_data || ( puts("\e[31m=> 下载失败，安装取消！\e[0m") || exit(-1) )
+  download_ecdict_raw_data || ( puts("\e[31m=> 下载失败，安装取消！\e[0m") || exit(-1) )
   decompress_7z_to_csv || ( puts("\e[31m=> 解压失败，安装取消！\e[0m") || exit(-2) )
   generate_sqlite_db   || ( puts("\e[31m=> 生成数据库失败，安装取消!\e[0m") || exit(-3) )
   puts
@@ -340,7 +360,7 @@ def reply_once(query)
 
   if !check_db_integrity
     puts "ecdict: 数据库不存在或数据库不完整，请使用`ecdict -i`来下载安装词典数据"
-    db_close_and_exit(1)
+    close_db_and_exit(1)
   end
 
   tables = []
@@ -360,7 +380,7 @@ def reply_once(query)
 
   if rows.empty?
     puts "ecdict: 未找到结果,请检查单词拼写是否正确"
-    db_close
+    close_db
     return
   else
     line = rows[0]
@@ -407,11 +427,11 @@ def chinese_search(cn_word, support_phrase: false)
 
   if cn_word.empty?
     puts "ecdict: 请输入要查询的中文，或使用`ecdict -h`查看帮助"
-    db_close_and_exit(2)
+    close_db_and_exit(2)
   end
   if !check_db_integrity
     puts "=> 数据库不存在或数据库不完整，请使用`ecdict -i`来下载安装词典数据"
-    db_close_and_exit(1)
+    close_db_and_exit(1)
   end
 
   if support_phrase
@@ -432,7 +452,7 @@ def chinese_search(cn_word, support_phrase: false)
   end
   if rows.empty?
     puts "ecdict: 未找到相关英文,请不要输入中文短语或短句，仅支持词的搜索"
-    db_close
+    close_db
     return
   else
     # 有的时候并不是没有结果，而是被我们过滤掉了，对此确认一下
@@ -557,7 +577,7 @@ def start_ecrepl
 
   if !check_db_integrity
     puts "ecdict: 数据库不存在或数据库不完整，请使用`ecdict -i`来下载安装词典数据"
-    db_close_and_exit(1)
+    close_db_and_exit(1)
   end
 
   begin
@@ -615,7 +635,7 @@ def start_ecrepl
     while line = Reline.readline("\e[32mecdict> \e[0m", true)
       case word = line.chomp
       when 'exit'
-        db_close
+        close_db
         return
       when ''
         # NOOP
@@ -626,7 +646,7 @@ def start_ecrepl
   rescue Interrupt
     # puts '^C'
     `stty #{stty_save}` if stty_save
-    db_close
+    close_db
     return
   end
 
@@ -637,7 +657,7 @@ end
 # remove everything in #{ECDICT_STORAGE}
 #
 def delete_cache
-  db_close
+  close_db
   begin
     FileUtils.rm_rf(ECDICT_STORAGE)
   rescue => e
@@ -689,10 +709,10 @@ end
 if ARGV.empty?
   if !check_db_integrity
     puts "ecdict: 数据库不存在或数据库不完整，请使用`ecdict -i`来下载安装词典数据"
-    db_close_and_exit(1)
+    close_db_and_exit(1)
   end
   puts "ecdict: 请输入要查询的词/词组 或使用`ecdict -h`查看帮助"
-  db_close_and_exit
+  close_db_and_exit(2)
 end
 
 query = ARGV.shift
@@ -709,4 +729,4 @@ else
 end
 
 # ensure close db
-db_close
+close_db
