@@ -12,7 +12,7 @@ gem install ecdict
 
 📚 ecdict dictionary (Ruby Powered)
 
-![screenshot](./images/screenshot.png)
+![screencast](./images/screencast.gif)
 
 </div>
 
@@ -30,12 +30,6 @@ gem install ecdict
 ```
 
 <br>
-
-## 演示
-
-![screencast](screencast.gif "ecdict")
-
-
 
 ### 依赖
 
