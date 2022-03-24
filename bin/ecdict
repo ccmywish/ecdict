@@ -65,8 +65,7 @@ def cyan(str)       "\e[36m#{str}\e[0m" end
 
 def check_download_integrity
   require 'digest'
-  cont = File.read(ECDictRAWDATA)
-  sha256 = Digest::SHA256.hexdigest(cont)
+  sha256 = Digest::SHA256.file(ECDictRAWDATA).hexdigest
   if ECDICT_DICT_SHA256 == sha256
     true
   else
@@ -304,9 +303,12 @@ def download_and_install_ecdict_data
   decompress_7z_to_csv || ( puts("\e[31m=> 解压失败，安装取消！\e[0m") || exit(-2) )
   generate_sqlite_db   || ( puts("\e[31m=> 生成数据库失败，安装取消!\e[0m") || exit(-3) )
   puts
-  puts "=> Hooray! 词典数据下载安装完成! 请尝试使用:"
-  puts "=>   1. ecdict word  查询单词 "
-  puts "=>   2. ecdict -r    进入交互式查询REPL"
+  puts "Hooray! 词典数据下载安装完成! 请尝试使用:\n\n"
+  puts "    1. ecdict word      查询单词 "
+  puts "    2. ecdict -r        进入交互式查询REPL"
+  puts "    3. ecdict -c  中文  搜索中文单词"
+  puts "    4. ecdict -cp 中文  搜索中文短语"
+  puts
 end
 
 
@@ -644,8 +646,6 @@ end
 def print_version
   puts <<EOH
 ecdict (v#{ECDICT_GEM_VERSION}): A courteous cli translator.
-
-
 EOH
 
 end

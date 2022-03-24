@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased](#) (2022-03-23)
+## [Unreleased](#) (2022-03-24)
 
 ### New features:
 
@@ -11,12 +11,15 @@
 
 - Remove not used files
 
+### Bug fixes:
+
+- Use file digest to work on Windows
+
 ### Deprecations:
 
 - Not curl, use `git` to download data
 
-  1. Windows上有问题，用`curl`下载不下来
-  2. 下载附件的速度过慢，远不如使用`git`快
+  The download speed is too slow compared with `git`
 
 <br>
 
