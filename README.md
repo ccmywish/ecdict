@@ -54,14 +54,14 @@ ecdict: A courteous cli translator.
 
 usage:
 
-  ecdict word     => 查询单词 word
-  ecdict -r       => 启动ecdict repl交互式查询，输入exit或Ctrl-C退出
-  ecdict -c  中文  => 搜索中文对应的英文单词
-  ecdict -cp 中文  => 搜索中文对应的英文单词以及短语(结果可能很多)
-  ecdict -i       => 下载ecdict词典数据并安装
-  ecdict -v       => 打印此Gem与词典版本号
-  ecdict -h       => 打印此帮助
-  ecdict -d       => 清空词典数据
+  ecdict word      => 查询单词word
+  ecdict -r        => 启动ecdict repl交互式查询，输入exit或Ctrl-C/D退出
+  ecdict -c  中文  => 搜索中文单词对应的英文单词
+  ecdict -cp 中文  => 搜索中文短语对应的英文短语
+  ecdict -i        => 下载ecdict词典数据并安装
+  ecdict -v        => 打印此Gem版本号
+  ecdict -h        => 打印此帮助
+  ecdict -d        => 清空词典数据
 
 ```
 

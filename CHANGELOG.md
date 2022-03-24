@@ -9,6 +9,7 @@
 
 ### Enhancements:
 
+- Ensure close db
 - Fix exit status
 - Remove not used files
 
