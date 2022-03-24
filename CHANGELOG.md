@@ -9,6 +9,7 @@
 
 ### Enhancements:
 
+- Fix exit status
 - Remove not used files
 
 ### Bug fixes:

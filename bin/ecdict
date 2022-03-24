@@ -15,6 +15,12 @@
 #   1. ecdict installer
 #   2. ecdict cmd
 #   3. ecdict repl
+#
+# Exit -1: 下载原始数据失败
+# Exit -2: 解压原始数据至CSV失败
+# EXit -3: 从CSV生成数据库失败
+# Exit  1: 无词典
+# Exit  2: 缺少参数
 # ------------------------------------------------------
 
 require 'sqlite3'
@@ -24,7 +30,7 @@ ECDictRAWDATA  = File.join(ECDICT_STORAGE, 'ecdict-csv.7z')
 ECDictDB  = File.join(ECDICT_STORAGE, 'ecdict.db')
 ECDictCSV = File.join(ECDICT_STORAGE, 'ecdict.csv')
 
-ECDICT_GEM_VERSION  = "1.2.alpha3"
+ECDICT_GEM_VERSION  = "1.2.alpha4"
 
 # 这个版本是我从上游下载的CSV后自己压缩的
 # 这个文件的实际创建日期(上游作者创建)是2017/06/04
@@ -37,6 +43,16 @@ ECDICT_DICT_SHA256 = "86782a0e5d05486b482be5a2e5fa99b1a9b2ae51240c853ecfe1818861
 require 'fileutils'
 FileUtils.mkdir_p(ECDICT_STORAGE)
 $DB = SQLite3::Database.new ECDictDB
+
+def db_close
+  $DB.close if $DB
+end
+
+def db_close_and_exit(num = 0)
+  db_close
+  exit num
+end
+
 
 
 ####################
@@ -152,9 +168,6 @@ end
 #   2. create table in the db
 #   3. insert data from CSV into the table
 #
-# exit 1 : create db failed
-# exit 2 : insert data failed
-#
 def generate_sqlite_db()
 
   # SQLite3::Database.new已经生成了该文件,所以需要提前判断到底是否存在
@@ -171,9 +184,6 @@ def generate_sqlite_db()
     end
   end
 
-  def db_close
-    $DB.close if $DB
-  end
 
   # 共15个字段,存的时候只需要14个
   # 1.id    	    主键，自增
@@ -225,7 +235,7 @@ EOF
     puts "=> 创建数据库文件#{ECDictDB}失败，或表`ecdict`生成失败"
     db_close
     File.delete(ECDictDB)
-    exit 1
+    return false
   end
 
 
@@ -288,13 +298,14 @@ EOF
   rescue Exception => e
     puts "=> #{e.message}"
     puts "=> 数据库插入信息失败"
-    File.delete(ECDictDB)
     db_close
-    exit 2
+    File.delete(ECDictDB)
+    return false
   end
   puts
   puts "=> 数据库#{ECDictDB}已完整生成"
   db_close
+  return true
 end
 
 
@@ -328,8 +339,8 @@ end
 def reply_once(query)
 
   if !check_db_integrity
-    puts "ecdict: 数据库不存在或数据库不完整，请使用ecdict -i来下载安装词典数据"
-    exit -1
+    puts "ecdict: 数据库不存在或数据库不完整，请使用`ecdict -i`来下载安装词典数据"
+    db_close_and_exit(1)
   end
 
   tables = []
@@ -348,8 +359,9 @@ def reply_once(query)
   end
 
   if rows.empty?
-    puts "ecdict: 未找到结果,请检查单词拼写是否正确",""
-    exit 2
+    puts "ecdict: 未找到结果,请检查单词拼写是否正确"
+    db_close
+    return
   else
     line = rows[0]
     phonetic,trans,definition,exchange = line[0],line[1],line[2],line[3]
@@ -395,11 +407,11 @@ def chinese_search(cn_word, support_phrase: false)
 
   if cn_word.empty?
     puts "ecdict: 请输入要查询的中文，或使用`ecdict -h`查看帮助"
-    exit 1
+    db_close_and_exit(2)
   end
   if !check_db_integrity
     puts "=> 数据库不存在或数据库不完整，请使用`ecdict -i`来下载安装词典数据"
-    exit -1
+    db_close_and_exit(1)
   end
 
   if support_phrase
@@ -420,7 +432,8 @@ def chinese_search(cn_word, support_phrase: false)
   end
   if rows.empty?
     puts "ecdict: 未找到相关英文,请不要输入中文短语或短句，仅支持词的搜索"
-    exit 2
+    db_close
+    return
   else
     # 有的时候并不是没有结果，而是被我们过滤掉了，对此确认一下
     found_a_word = false
@@ -543,12 +556,7 @@ def start_ecrepl
 
   if !check_db_integrity
     puts "ecdict: 数据库不存在或数据库不完整，请使用`ecdict -i`来下载安装词典数据"
-    exit -1
-  end
-
-  def db_close_and_exit
-    $DB.close if $DB
-    exit 0
+    db_close_and_exit(1)
   end
 
   begin
@@ -606,7 +614,8 @@ def start_ecrepl
     while line = Reline.readline("\e[32mecdict> \e[0m", true)
       case word = line.chomp
       when 'exit'
-        db_close_and_exit
+        db_close
+        return
       when ''
         # NOOP
       else
@@ -616,7 +625,8 @@ def start_ecrepl
   rescue Interrupt
     puts '^C'
     `stty #{stty_save}` if stty_save
-    db_close_and_exit
+    db_close
+    return
   end
 
 end
@@ -630,10 +640,10 @@ def delete_cache
   begin
     FileUtils.rm_rf(ECDICT_STORAGE)
   rescue => e
-    puts "=> #{e.message}"
-    puts "=> 清空词典数据失败"
+    puts "ecdict: #{e.message}"
+    puts "ecdict: 清空词典数据失败"
   else
-    puts "=> 清空词典数据完成"
+    puts "ecdict: 清空词典数据完成"
   end
   puts
 end
@@ -678,10 +688,10 @@ end
 if ARGV.empty?
   if !check_db_integrity
     puts "ecdict: 数据库不存在或数据库不完整，请使用`ecdict -i`来下载安装词典数据"
-    exit -1
+    db_close_and_exit(1)
   end
   puts "ecdict: 请输入要查询的词/词组 或使用`ecdict -h`查看帮助"
-  exit 1
+  db_close_and_exit
 end
 
 query = ARGV.shift
@@ -696,4 +706,3 @@ when "-cp" then chinese_search(ARGV.join, support_phrase: true)
 else
   reply_once(query)
 end
-
