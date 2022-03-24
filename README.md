@@ -21,6 +21,11 @@ gem install ecdict
 
 若您有新的想法，发现了存在的/潜在的问题、可改善的地方(比如对REPL的交互性优化)，又或者您想要参与开发以及日常维护，请您在[issues](https://gitee.com/ccmywish/ecdict/issues) 处反馈，并请阅读[CONTRIBUTING.md](./CONTRIBUTING.md)
 
+
+参考 
+- [v1.0 ecdict from Ruby China](https://ruby-china.org/topics/40512)
+- [v1.2 ecdict from Ruby China](https://ruby-china.org/topics/42254)
+
 <br>
 
 ## 安装
