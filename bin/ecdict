@@ -509,7 +509,7 @@ def chinese_search(cn_word, support_phrase: false)
       puts
     else
 
-      if support_phrase
+      if !support_phrase
         puts "ecdict: 抱歉，为了防止显示内容过多，已将可能的答案过滤了"
         puts "ecdict: 您可尝试使用`ecdict -cp`来搜索短语，扩大搜索范围"
       else
