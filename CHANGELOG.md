@@ -1,6 +1,14 @@
 # Changelog
 
-## [Unreleased](#) (2022-03-24)
+## [Unreleased](#) (2022-03-25)
+
+<br>
+
+## [v1.2.1](#) (2022-03-25)
+
+### Bug fixes:
+
+- Fix hint on search Chinese
 
 <br>
 

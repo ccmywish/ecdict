@@ -3,7 +3,7 @@
 # File          : ecdict.rb
 # Authors       : ccmywish <ccmywish@qq.com>
 # Created on    : <2020-10-18>
-# Last modified : <2022-03-24>
+# Last modified : <2022-03-25>
 #
 # ecdict:
 #
@@ -33,7 +33,7 @@ ECDICT_RAW_DATA  = File.join(ECDICT_STORAGE, 'ecdict-csv.7z')
 ECDictDB  = File.join(ECDICT_STORAGE, 'ecdict.db')
 ECDictCSV = File.join(ECDICT_STORAGE, 'ecdict.csv')
 
-ECDICT_GEM_VERSION  = "1.2"
+ECDICT_GEM_VERSION  = "1.2.1"
 
 # 这个版本是我从上游下载的CSV后自己压缩的
 # 这个文件的实际创建日期(上游作者创建)是2017/06/04
@@ -451,7 +451,7 @@ def chinese_search(cn_word, support_phrase: false)
     end
   end
   if rows.empty?
-    puts "ecdict: 未找到相关英文,请不要输入中文短语或短句，仅支持词的搜索"
+    puts "ecdict: 抱歉，未找到与之相关的英文"
     close_db
     return
   else
@@ -467,12 +467,14 @@ def chinese_search(cn_word, support_phrase: false)
       next if trans.include?("\r\n")
       next if trans.include?("\n")
 
-      # 不要搜索词组
+
       if !support_phrase
+        # 不要搜索词组
         next if en_word.include?(' ')
+        # 不要搜索连字词
+        next if en_word.include?('-')
       end
-      # 不要搜索连字词
-      next if en_word.include?('-')
+
 
       # filter
       # "[网络] 微软，认证专家；微软认证产品专家；微软专家认证"
@@ -506,8 +508,14 @@ def chinese_search(cn_word, support_phrase: false)
     if found_a_word
       puts
     else
-      puts "ecdict: 抱歉，为了防止显示内容过多，已将可能的答案过滤了"
-      puts "ecdict: 您可尝试使用`ecdict -cp`来搜索短语，扩大搜索范围"
+
+      if support_phrase
+        puts "ecdict: 抱歉，为了防止显示内容过多，已将可能的答案过滤了"
+        puts "ecdict: 您可尝试使用`ecdict -cp`来搜索短语，扩大搜索范围"
+      else
+        puts "ecdict: 抱歉，未找到与之相关的英文"
+      end
+
     end
   # end of else
   end
