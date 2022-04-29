@@ -16,6 +16,8 @@ DESC
   s.homepage = "https://gitee.com/ccmywish/ecdict"
 
   s.files = [
+    'bin/ecdict',
+    'lib/ecdict.rb'
   ]
 
   s.executables = ["ecdict"]
