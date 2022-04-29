@@ -2,6 +2,10 @@
 
 ## [Unreleased](#) (2022-04-29)
 
+<br>
+
+## [v1.3.0](#) (2022-04-29)
+
 ### Enhancements:
 
 - Auto re-search using phrase when filerted on Chinese
