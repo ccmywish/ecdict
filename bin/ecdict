@@ -3,7 +3,7 @@
 # File          : ecdict.rb
 # Authors       : ccmywish <ccmywish@qq.com>
 # Created on    : <2020-10-18>
-# Last modified : <2022-04-29>
+# Last modified : <2022-04-30>
 #
 # ecdict:
 #
@@ -26,6 +26,7 @@
 # ------------------------------------------------------
 
 require 'sqlite3'
+require 'ecdict'
 
 ECDict::STORAGE   = File.expand_path("~/.local/share/ecdict")
 ECDict::RAW_DATA  = File.join(ECDict::STORAGE, 'ecdict-csv.7z')
