@@ -600,7 +600,9 @@ def start_ecrepl
   require 'reline'
   Reline.completion_proc = lambda do |word|
     if word.strip.empty?
-      return %w{1.输入单词并回车查询含义 2.输入单词时按一次tab键反馈搜索建议 3.输入exit或按Ctrl-C或Ctrl-D退出}
+    return %w[1.输入单词并回车查询含义
+              2.输入单词时按一次tab键反馈搜索建议
+              3.输入exit或按Ctrl-C或Ctrl-D退出]
     end
 
     max_len = word.length + 4
@@ -608,30 +610,54 @@ def start_ecrepl
 
     # $DB.execute "SELECT DISTINCT sw FROM ecdict WHERE sw LIKE '#{word}%' AND length(sw)<#{max_len} LIMIT 12" { |row| puts row }
 
-    # 以word开头的单词
-    ret = $DB.execute "SELECT DISTINCT sw FROM ecdict WHERE sw LIKE '#{word}%'
-    AND length(sw)<#{max_len} LIMIT 64"
-    # [["baba"], ["babe"], ["babn"], ["baby"]]
-    ret = ret.to_a.flatten
 
-    if word.length <= 7
-      LsTable.ls(ret) { puts blue(_1) }
-    else
-      LsTable.ls(ret, cell_len: 14, cell_num: 6) { puts blue(_1) }
+    # Display suggestions
+    #
+    # @params word [String] The word we search
+    # @params ret  [Array]  The suggestions array returned
+    def _display_suggestions(word, ret)
+      return if ret.empty?
+      if word.length <= 7
+        LsTable.ls(ret) { puts blue(_1) }
+      else
+       LsTable.ls(ret, cell_len: 14, cell_num: 6) { puts blue(_1) }
+      end
+      puts
     end
 
-    puts
-
-    # 前面至少有一个字符
-    ret = $DB.execute "SELECT DISTINCT sw FROM ecdict WHERE sw LIKE '_%#{word}%'
-    AND length(sw)<#{max_len} LIMIT 64"
-    ret = ret.to_a.flatten
-    if word.length <= 7
-      LsTable.ls(ret) { puts blue(_1) }
-    else
-      LsTable.ls(ret, cell_len: 14, cell_num: 6) { puts blue(_1) }
+    # Generate suggestions
+    # 1. the words beginning with our search word
+    # 2. the words including our search word
+    #
+    # @params word    [String]  The word we search
+    # @params max_len [Integer] Suggestion's max length
+    def _gen_suggestion_1(word, max_len)
+      ret = $DB.execute <<-SQL
+        SELECT DISTINCT sw FROM ecdict WHERE sw LIKE '#{word}%'
+        AND length(sw)<#{max_len} LIMIT 64
+      SQL
+      # [["baba"], ["babe"], ["babn"], ["baby"]]
+      ret = ret.to_a.flatten
     end
 
+    def _gen_suggestion_2(word, max_len)
+      ret = $DB.execute <<-SQL
+        SELECT DISTINCT sw FROM ecdict WHERE sw LIKE '_%#{word}%'
+        AND length(sw)<#{max_len} LIMIT 64
+      SQL
+      ret = ret.to_a.flatten
+    end
+
+    suggestions = [
+      Thread.new {
+        _display_suggestions word, _gen_suggestion_1(word, max_len)
+      },
+      Thread.new {
+        _display_suggestions word, _gen_suggestion_2(word, max_len)
+      }
+    ].each(&:join)
+
+    ""
   end
 
   #
