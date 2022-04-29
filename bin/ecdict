@@ -350,7 +350,7 @@ end
 #
 # Error code -1: No db or db not intact
 # Error code  1: No input
-# Error code  2: Don't find a result
+# Error code  2: Doesn't find a result
 #
 
 #
