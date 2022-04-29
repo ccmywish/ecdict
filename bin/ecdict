@@ -421,7 +421,7 @@ end
 #
 # Search Chinese word to find English words
 #
-def chinese_search(cn_word, support_phrase: false)
+def search_chinese(cn_word, support_phrase: false)
 
   if cn_word.empty?
     puts "ecdict: 请输入要查询的中文，或使用`ecdict -h`查看帮助"
@@ -433,7 +433,7 @@ def chinese_search(cn_word, support_phrase: false)
   end
 
   if support_phrase
-    puts "ecdict: 搜索加强，支持短语"
+    puts "ecdict: 搜索加强，包含短语"
   end
 
   tables = []
@@ -508,8 +508,8 @@ def chinese_search(cn_word, support_phrase: false)
     else
 
       if !support_phrase
-        puts "ecdict: 抱歉，为了防止显示内容过多，已将可能的答案过滤了"
-        puts "ecdict: 您可尝试使用`ecdict -cp`来搜索短语，扩大搜索范围"
+        puts "ecdict: 扩大搜索范围，再次尝试搜索..."
+        search_chinese(cn_word, support_phrase: true)
       else
         puts "ecdict: 抱歉，未找到与之相关的英文"
       end
@@ -722,8 +722,7 @@ usage:
 
   ecdict word      => 查询单词word
   ecdict -r        => 启动ecdict repl交互式查询，输入exit或Ctrl-C/D退出
-  ecdict -c  中文  => 搜索中文单词对应的英文单词
-  ecdict -cp 中文  => 搜索中文短语对应的英文短语
+  ecdict -c  中文  => 搜索中文单词对应的英文单词/短语
   ecdict -i        => 下载ecdict词典数据并安装
   ecdict -v        => 打印此Gem版本号
   ecdict -h        => 打印此帮助
@@ -754,8 +753,7 @@ when "-h"  then help
 when "-i"  then download_and_install_ecdict_data
 when "-r"  then start_ecrepl
 when "-d"  then delete_cache
-when "-c"  then chinese_search(ARGV.join)
-when "-cp" then chinese_search(ARGV.join, support_phrase: true)
+when "-c"  then search_chinese(ARGV.join)
 else
   reply_once(query)
 end
