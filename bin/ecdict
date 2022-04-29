@@ -27,25 +27,23 @@
 
 require 'sqlite3'
 
-ECDICT_STORAGE   = File.expand_path("~/.local/share/ecdict")
-ECDICT_RAW_DATA  = File.join(ECDICT_STORAGE, 'ecdict-csv.7z')
+ECDict::STORAGE   = File.expand_path("~/.local/share/ecdict")
+ECDict::RAW_DATA  = File.join(ECDict::STORAGE, 'ecdict-csv.7z')
 
-ECDictDB  = File.join(ECDICT_STORAGE, 'ecdict.db')
-ECDictCSV = File.join(ECDICT_STORAGE, 'ecdict.csv')
-
-ECDICT_GEM_VERSION  = "1.3.0"
+ECDict::DB  = File.join(ECDict::STORAGE, 'ecdict.db')
+ECDict::CSV = File.join(ECDict::STORAGE, 'ecdict.csv')
 
 # 这个版本是我从上游下载的CSV后自己压缩的
 # 这个文件的实际创建日期(上游作者创建)是2017/06/04
 # 至2022/03/22，未见更新，估计以后上游维护这个词典的也不会经常更新
 # 而340万的单词量已经足够，因此我们可以足够长的时间一直停留在此词典版本
-ECDICT_DICT_DOWNLOAD_LINK = "https://gitee.com/ccmywish/ecdict-data"
-ECDICT_DICT_SHA256 = "86782a0e5d05486b482be5a2e5fa99b1a9b2ae51240c853ecfe181886133818a"
+ECDict::DICT_DOWNLOAD_LINK = "https://gitee.com/ccmywish/ecdict-data"
+ECDict::DICT_SHA256 = "86782a0e5d05486b482be5a2e5fa99b1a9b2ae51240c853ecfe181886133818a"
 
 
 require 'fileutils'
-FileUtils.mkdir_p(ECDICT_STORAGE)
-$DB = SQLite3::Database.new ECDictDB
+FileUtils.mkdir_p(ECDict::STORAGE)
+$DB = SQLite3::Database.new ECDict::DB
 
 def close_db
   $DB.close if $DB
@@ -84,9 +82,9 @@ def cyan(str)       "\e[36m#{str}\e[0m" end
 
 def check_download_integrity
   require 'digest'
-  return false if !File.exists?(ECDICT_RAW_DATA)
-  sha256 = Digest::SHA256.file(ECDICT_RAW_DATA).hexdigest
-  if ECDICT_DICT_SHA256 == sha256
+  return false if !File.exists?(ECDict::RAW_DATA)
+  sha256 = Digest::SHA256.file(ECDict::RAW_DATA).hexdigest
+  if ECDict::DICT_SHA256 == sha256
     true
   else
     false
@@ -96,40 +94,40 @@ end
 
 def download_ecdict_raw_data
 
-  if File.exists?(ECDICT_RAW_DATA) && check_download_integrity
-    puts "=> 已存在原始数据文件#{ECDICT_RAW_DATA}, 无需再次下载"
+  if File.exists?(ECDict::RAW_DATA) && check_download_integrity
+    puts "=> 已存在原始数据文件#{ECDict::RAW_DATA}, 无需再次下载"
   else
 
-    if File.exists?(ECDICT_RAW_DATA)
+    if File.exists?(ECDict::RAW_DATA)
       puts "=> 删除已存在但不完整的原始数据文件"
-      FileUtils.rm ECDICT_RAW_DATA
+      FileUtils.rm ECDict::RAW_DATA
     end
 
     # 若已经有拉取的仓库，先检查里面的数据是否可用
-    raw_data_git_dir = File.join(ECDICT_STORAGE, 'ecdict-data')
+    raw_data_git_dir = File.join(ECDict::STORAGE, 'ecdict-data')
     raw_data_git_dir_data = File.join(raw_data_git_dir, 'ecdict-csv.7z')
 
     if Dir.exists?(raw_data_git_dir)
       if File.exists?(raw_data_git_dir_data)
-        FileUtils.cp(raw_data_git_dir_data, ECDICT_STORAGE)
+        FileUtils.cp(raw_data_git_dir_data, ECDict::STORAGE)
         if check_download_integrity
           puts "=> 从已经Git pull到的仓库中获取原始数据文件"
           return true
         else
-          FileUtils.rm ECDICT_RAW_DATA
+          FileUtils.rm ECDict::RAW_DATA
         end
       end
       FileUtils.rm_rf(raw_data_git_dir)
     end
 
     begin
-      puts "=> 使用Git从#{ECDICT_DICT_DOWNLOAD_LINK}获取原始数据库文件"
-      ret = system("git -C #{ECDICT_STORAGE} clone #{ECDICT_DICT_DOWNLOAD_LINK} ")
-      FileUtils.cp(File.join(ECDICT_STORAGE, 'ecdict-data', 'ecdict-csv.7z'), ECDICT_STORAGE) rescue nil
+      puts "=> 使用Git从#{ECDict::DICT_DOWNLOAD_LINK}获取原始数据库文件"
+      ret = system("git -C #{ECDict::STORAGE} clone #{ECDict::DICT_DOWNLOAD_LINK} ")
+      FileUtils.cp(File.join(ECDict::STORAGE, 'ecdict-data', 'ecdict-csv.7z'), ECDict::STORAGE) rescue nil
       raise "Git拉取仓库过程失败，原始数据文件不完整!" if (ret != true  || !check_download_integrity)
     rescue StandardError => e
       puts "=> #{e.message}"
-      FileUtils.rm(ECDICT_RAW_DATA) rescue nil
+      FileUtils.rm(ECDict::RAW_DATA) rescue nil
       return false
     else
       puts "=> 下载完成!"
@@ -143,10 +141,10 @@ def decompress_7z_to_csv()
   require 'seven_zip_ruby'
 
   # 正常解压出来的CSV应当至少200MB以上
-  if File.exists?(ECDictCSV)
-    if File.size(ECDictCSV) <= 200*1024*1024
+  if File.exists?(ECDict::CSV)
+    if File.size(ECDict::CSV) <= 200*1024*1024
       puts "=> 删除旧有的不完全词典数据"
-      FileUtils.rm(ECDictCSV)
+      FileUtils.rm(ECDict::CSV)
     else
       puts "=> CSV数据已存在，无需再次解压，直接使用"
       return true
@@ -154,12 +152,12 @@ def decompress_7z_to_csv()
   end
 
 
-  File.open(ECDICT_RAW_DATA, "rb") do |file|
+  File.open(ECDict::RAW_DATA, "rb") do |file|
     puts "=> 正在解压ecdict-csv.7z(#{ '%.2f' % (file.size/1024.0/1024) }MB)"
-    SevenZipRuby::Reader.extract_all(file, ECDICT_STORAGE)
+    SevenZipRuby::Reader.extract_all(file, ECDict::STORAGE)
   end
 
-  puts "=> 已成功解压出ecdict.csv(#{ '%.2f' % (File.size(ECDictCSV)/1024.0/1024) }MB)"
+  puts "=> 已成功解压出ecdict.csv(#{ '%.2f' % (File.size(ECDict::CSV)/1024.0/1024) }MB)"
   true
 end
 
@@ -170,7 +168,7 @@ end
 #
 def check_db_integrity
   # 正常从CSV生成出来的数据库应当至少400MB以上
-  if File.size(ECDictDB) <= 400*1024*1024
+  if File.size(ECDict::DB) <= 400*1024*1024
     false
   else
     true
@@ -191,13 +189,13 @@ end
 def generate_sqlite_db()
 
   # SQLite3::Database.new已经生成了该文件,所以需要提前判断到底是否存在
-  if File.exist?(ECDictDB)
+  if File.exist?(ECDict::DB)
 
     if !check_db_integrity
       puts "=> 删除旧有的不完整数据库"
       $DB.close
-      FileUtils.rm(ECDictDB)
-      $DB = SQLite3::Database.new ECDictDB
+      FileUtils.rm(ECDict::DB)
+      $DB = SQLite3::Database.new ECDict::DB
     else
       puts "=> 完整(可能的)数据库已存在，无需再次从CSV文件生成，直接使用"
       return true
@@ -249,12 +247,12 @@ EOF
 
   begin
     $DB.execute sql
-    puts "=> 创建数据库文件#{ECDictDB}，并生成表`ecdict`"
+    puts "=> 创建数据库文件#{ECDict::DB}，并生成表`ecdict`"
   rescue Exception => e
     puts "=> #{e.message}"
-    puts "=> 创建数据库文件#{ECDictDB}失败，或表`ecdict`生成失败"
+    puts "=> 创建数据库文件#{ECDict::DB}失败，或表`ecdict`生成失败"
     close_db
-    File.delete(ECDictDB)
+    File.delete(ECDict::DB)
     return false
   end
 
@@ -276,7 +274,7 @@ EOF
     puts <<~EOC
 
     #{blue("gem_name  = 'ecdict'")}
-    #{blue("version   = '#{ECDICT_GEM_VERSION}'")}
+    #{blue("version   = '#{ECDict::VERSION}'")}
     #{blue("author    = 'ccmywish'")}
     #{blue("bug_track = [ 'https://gitee.com/ccmywish/ecdict/issues'
               'https://github.com/ccmywish/ecdict/issues ]")}
@@ -301,7 +299,7 @@ EOF
     require 'csv'
     num = 0
     $DB.transaction
-    CSV.foreach(ECDictCSV) do |row|
+    CSV.foreach(ECDict::CSV) do |row|
       num = num + 1
       next if num == 1     # headers不加入
       row.map! do |n|
@@ -319,11 +317,11 @@ EOF
     puts "=> #{e.message}"
     puts "=> 数据库插入信息失败"
     close_db
-    File.delete(ECDictDB)
+    File.delete(ECDict::DB)
     return false
   end
   puts
-  puts "=> 数据库#{ECDictDB}已完整生成"
+  puts "=> 数据库#{ECDict::DB}已完整生成"
   close_db
   return true
 end
@@ -688,12 +686,12 @@ end
 
 
 #
-# remove everything in #{ECDICT_STORAGE}
+# remove everything in #{ECDict::STORAGE}
 #
 def delete_cache
   close_db
   begin
-    FileUtils.rm_rf(ECDICT_STORAGE)
+    FileUtils.rm_rf(ECDict::STORAGE)
   rescue => e
     puts "ecdict: #{e.message}"
     puts "ecdict: 清空词典数据失败"
@@ -710,7 +708,7 @@ end
 
 def print_version
   puts <<EOH
-ecdict (v#{ECDICT_GEM_VERSION}): A courteous cli translator.
+ecdict (v#{ECDict::VERSION}): A courteous cli translator.
 EOH
 
 end
@@ -718,7 +716,7 @@ end
 
 def help
   puts <<EOH
-ecdict (v#{ECDICT_GEM_VERSION}): A courteous cli translator.
+ecdict (v#{ECDict::VERSION}): A courteous cli translator.
 
 usage:
 
