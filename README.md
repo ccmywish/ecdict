@@ -55,8 +55,7 @@ usage:
 
   ecdict word      => 查询单词word
   ecdict -r        => 启动ecdict repl交互式查询，输入exit或Ctrl-C/D退出
-  ecdict -c  中文  => 搜索中文单词对应的英文单词
-  ecdict -cp 中文  => 搜索中文短语对应的英文短语
+  ecdict -c  中文  => 搜索中文单词对应的英文单词/短语
   ecdict -i        => 下载ecdict词典数据并安装
   ecdict -v        => 打印此Gem版本号
   ecdict -h        => 打印此帮助
@@ -73,3 +72,4 @@ usage:
 - 下载安装sqlite源代码 [sqlite-amalgamation-xxxx.zip](https://sqlite.org/download.html) 解压到某文件夹如D:\sqlite-src.
 - 运行 `gem install sqlite3 -- --with-sqlite3-lib=D:\sqlite-src`
 
+<br>
