@@ -1,9 +1,9 @@
 require 'date'
-load './bin/ecdict'
+require_relative './lib/ecdict'
 
 Gem::Specification.new do |s|
   s.name    = "ecdict"
-  s.version = ECDICT_GEM_VERSION
+  s.version = ECDict::VERSION
   s.date    = Date.today.to_s
   s.summary = "ecdict: English-to-Chinese dictionary on the cli."
   s.description = <<DESC
@@ -19,8 +19,6 @@ DESC
   ]
 
   s.executables = ["ecdict"]
-  # For Bundler v2.3.12
-  s.required_ruby_version ">= 2.6.0"
   s.add_dependency 'sqlite3', "~> 1.4"
   s.add_dependency 'progress_bar', "~> 1.3"
   s.add_dependency "seven_zip_ruby", "~> 1.3"
