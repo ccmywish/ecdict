@@ -83,7 +83,7 @@ def cyan(str)       "\e[36m#{str}\e[0m" end
 
 def check_download_integrity
   require 'digest'
-  return false if !File.exists?(ECDict::RAW_DATA)
+  return false if !File.exist?(ECDict::RAW_DATA)
   sha256 = Digest::SHA256.file(ECDict::RAW_DATA).hexdigest
   if ECDict::DICT_SHA256 == sha256
     true
@@ -95,11 +95,11 @@ end
 
 def download_ecdict_raw_data
 
-  if File.exists?(ECDict::RAW_DATA) && check_download_integrity
+  if File.exist?(ECDict::RAW_DATA) && check_download_integrity
     puts "=> 已存在原始数据文件#{ECDict::RAW_DATA}, 无需再次下载"
   else
 
-    if File.exists?(ECDict::RAW_DATA)
+    if File.exist?(ECDict::RAW_DATA)
       puts "=> 删除已存在但不完整的原始数据文件"
       FileUtils.rm ECDict::RAW_DATA
     end
@@ -108,8 +108,8 @@ def download_ecdict_raw_data
     raw_data_git_dir = File.join(ECDict::STORAGE, 'ecdict-data')
     raw_data_git_dir_data = File.join(raw_data_git_dir, 'ecdict-csv.7z')
 
-    if Dir.exists?(raw_data_git_dir)
-      if File.exists?(raw_data_git_dir_data)
+    if Dir.exist?(raw_data_git_dir)
+      if File.exist?(raw_data_git_dir_data)
         FileUtils.cp(raw_data_git_dir_data, ECDict::STORAGE)
         if check_download_integrity
           puts "=> 从已经Git pull到的仓库中获取原始数据文件"
@@ -142,7 +142,7 @@ def decompress_7z_to_csv()
   require 'seven_zip_ruby'
 
   # 正常解压出来的CSV应当至少200MB以上
-  if File.exists?(ECDict::CSV)
+  if File.exist?(ECDict::CSV)
     if File.size(ECDict::CSV) <= 200*1024*1024
       puts "=> 删除旧有的不完全词典数据"
       FileUtils.rm(ECDict::CSV)
