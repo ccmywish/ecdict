@@ -1,6 +1,14 @@
 # Changelog
 
-## [Unreleased](#) (2022-04-29)
+## [Unreleased](#) (2023-02-27)
+
+<br>
+
+## [v1.3.2](#) (2023-02-27)
+
+### Bug fixes:
+
+- Fix `exists?` API with `exist?` to support Ruby 3.2
 
 <br>
 
@@ -25,7 +33,7 @@
 
 ### New features:
 
-- Support Chinese phrase search 
+- Support Chinese phrase search
 - Support Chinese search
 
 ### Enhancements:
